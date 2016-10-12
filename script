@@ -53,7 +53,7 @@ function print_server_details
   print_header "Server started at: $AT_SERVER:$AT_PORT\n\n  Email: $ADMIN_EMAIL\n  Password: $ADMIN_PASS"
 }
 
-function install
+function install_app
 {
   print_header "Installing latest ${REPO/https:\/\/github.com\//}/$BRANCH" &&
     clean_old_install
