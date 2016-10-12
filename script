@@ -1,0 +1,153 @@
+#!/bin/bash
+
+# Vars
+DIR="/Users/tom/Projects/scratch/"
+FOLDER="AT_TEST"
+REPO="https://github.com/cgkineo/adapt_authoring.git"
+BRANCH="staging"
+
+# Config items
+AT_SERVER="localhost"
+AT_PORT="5678"
+DB_SERVER="localhost"
+DB_NAME=$FOLDER
+DB_PORT="27017"
+DATA_ROOT="data"
+SESSION_SECRET="your-session-secret"
+USE_FFMPEG=true
+SMTP_SERVICE="none"
+SMTP_USERNAME="smtpUser"
+SMTP_PASS="smtpPass"
+SMTP_FROM="user@undefined.com"
+TENANT_DISPLAY_NAME="Test Tenant"
+TENANT_NAME="test_tenant"
+ADMIN_EMAIL="admin"
+ADMIN_PASS="password"
+
+function print_task
+{
+  printf "\n==> ${1}\n\n"
+}
+
+function print_header
+{
+  echo "-------------------------------------------------------------------------------"
+  printf "\n  ${1}\n\n"
+  echo "-------------------------------------------------------------------------------"
+}
+
+function print_help
+{
+  echo ""
+  echo "!! Unrecognised input"
+  echo ""
+  echo "Available tasks:"
+  echo "- install [app/db]"
+  echo "- update [framework/server]"
+  echo "- remove"
+  echo ""
+}
+
+function print_server_details
+{
+  print_header "Server started at: $AT_SERVER:$AT_PORT\n\n  Email: $ADMIN_EMAIL\n  Password: $ADMIN_PASS"
+}
+
+function install
+{
+  print_header "Installing latest ${REPO/https:\/\/github.com\//}/$BRANCH" &&
+    clean_old_install
+  print_task "Cloning repo" &&
+    git clone --depth 1 $REPO -b $BRANCH $FOLDER &&
+    cd $FOLDER &&
+  print_task "Installing dependencies" &&
+    rm -rf "node_modules" &&
+    npm install &&
+  print_task "Installing application" &&
+    node install --install Y --serverPort $AT_PORT --serverName $AT_SERVER --dbHost $DB_SERVER --dbName $DB_NAME --dbPort $DB_PORT --dataRoot $DATA_ROOT --sessionSecret $SESSION_SECRET --useffmpeg $USE_FFMPEG --smtpService $SMTP_SERVICE --smtpUsername $SMTP_USERNAME --smtpPassword $SMTP_PASS --fromAddress $SMTP_FROM --name $TENANT_NAME --displayName $TENANT_DISPLAY_NAME --email $ADMIN_EMAIL --password $ADMIN_PASS &&
+  print_task "Starting server" &&
+    forever start --id $FOLDER server.js &&
+  print_server_details
+}
+
+function clean_old_install {
+  print_task "Cleaning up previous install" &&
+  forever stop $FOLDER > /dev/null 2>&1
+  cd $DIR &&
+  rm -rf $DIR$FOLDER &&
+  mongo $DB_NAME --eval "db.dropDatabase()"
+}
+
+function update_server
+{
+  print_header "Updating the server" &&
+    forever stop $FOLDER > /dev/null 2>&1 &&
+    cd $DIR$FOLDER &&
+  CURRENT=$(git log -n 1 --pretty=format:"%H")
+  LATEST=$(git log -n 1 origin/production --pretty=format:"%H")
+  if [ $CURRENT != $LATEST ]
+  then
+    print_task "Pulling latest code" &&
+      git pull origin $BRANCH &&
+    print_task "Installing new dependencies" &&
+      npm install &&
+    print_task "Rebuilding front-end" &&
+      grunt build
+  else
+    echo "Already using the latest server code (commit:$CURRENT)"
+  fi &&
+  print_task "Starting server" &&
+    forever start --id $FOLDER server.js &&
+  print_server_details
+}
+
+function update_framework
+{
+  print_header "Updating the framework" &&
+    forever stop $FOLDER > /dev/null 2>&1 &&
+    MASTER_ID=$(cat conf/config.json | python -c "import sys, json; print json.load(sys.stdin)['masterTenantID']") &&
+    cd temp/$MASTER_ID/adapt_framework &&
+    CURRENT=$(cat package.json | python -c "import sys, json; print json.load(sys.stdin)['version']") &&
+  print_task "Checking for framework updates" &&
+    git fetch origin &&
+    LATEST=$(git describe --tags | sed -e 's/v//' -e 's/-.*$//') &&
+    if [ $CURRENT != $LATEST ]
+    then
+      print_task "Updating framework to $1" &&
+        git reset --hard $1 &&
+      print_task "Updating dependencies" &&
+        npm install
+    else
+      echo "Already using the latest framework ($CURRENT)"
+    fi &&
+  print_task "Updating framework plugins" &&
+    adapt install > /dev/null &&
+  print_header "Framework successfully updated ($LATEST)"
+}
+
+#
+# Process input
+#
+case $1 in
+  "install")
+    if [ $2 == "app" ]
+    then
+      install_app
+    fi
+    ;;
+  "update")
+    if [ $2 == "framework" ]
+    then
+      update_framework
+    elif [ $2 == "server" ]
+    then
+      update_server
+    fi
+    ;;
+  "remove")
+    clean_old_install
+    ;;
+  *)
+    print_help
+    ;;
+esac
