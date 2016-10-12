@@ -5,6 +5,8 @@ DIR="/Users/tom/Projects/scratch/"
 FOLDER="AT_TEST"
 REPO="https://github.com/cgkineo/adapt_authoring.git"
 BRANCH="staging"
+GIT_CLONE="y"
+USE_FOREVER="y"
 
 # Config items
 AT_SERVER="localhost"
@@ -55,25 +57,29 @@ function print_server_details
 
 function install_app
 {
-  print_header "Installing latest ${REPO/https:\/\/github.com\//}/$BRANCH" &&
-    clean_old_install
-  print_task "Cloning repo" &&
-    git clone --depth 1 $REPO -b $BRANCH $FOLDER &&
-    cd $FOLDER &&
-  print_task "Installing dependencies" &&
-    rm -rf "node_modules" &&
-    npm install &&
-  print_task "Installing application" &&
-    node install --install Y --serverPort $AT_PORT --serverName $AT_SERVER --dbHost $DB_SERVER --dbName $DB_NAME --dbPort $DB_PORT --dataRoot $DATA_ROOT --sessionSecret $SESSION_SECRET --useffmpeg $USE_FFMPEG --smtpService $SMTP_SERVICE --smtpUsername $SMTP_USERNAME --smtpPassword $SMTP_PASS --fromAddress $SMTP_FROM --name $TENANT_NAME --displayName $TENANT_DISPLAY_NAME --email $ADMIN_EMAIL --password $ADMIN_PASS &&
-  print_task "Starting server" &&
-    forever start --id $FOLDER server.js &&
-  print_server_details
+  print_header "Installing latest ${REPO/https:\/\/github.com\//}/$BRANCH\n  in $DIR$FOLDER" &&
+#    clean_old_install
+    cd $DIR
+  if [[ $GIT_CLONE == "y" ]]; then
+    print_task "Cloning repo" &&
+      git clone --depth 1 $REPO -b $BRANCH $FOLDER &&
+      cd $FOLDER
+  fi
+#  print_task "Installing dependencies" &&
+#    rm -rf "node_modules" &&
+#    npm install &&
+#  print_task "Installing application" &&
+#    node install --install Y --serverPort $AT_PORT --serverName $AT_SERVER --dbHost $DB_SERVER --dbName $DB_NAME --dbPort $DB_PORT --dataRoot $DATA_ROOT --sessionSecret $SESSION_SECRET --useffmpeg $USE_FFMPEG --smtpService $SMTP_SERVICE --smtpUsername $SMTP_USERNAME --smtpPassword $SMTP_PASS --fromAddress $SMTP_FROM --name $TENANT_NAME --displayName $TENANT_DISPLAY_NAME --email $ADMIN_EMAIL --password $ADMIN_PASS &&
+  if [[ $USE_FOREVER == "y" ]]; then
+    print_task "Starting server" &&
+      forever start --id $FOLDER server.js &&
+    print_server_details
+  fi
 }
 
 function clean_old_install {
   print_task "Cleaning up previous install" &&
   forever stop $FOLDER > /dev/null 2>&1
-  cd $DIR &&
   rm -rf $DIR$FOLDER &&
   mongo $DB_NAME --eval "db.dropDatabase()"
 }
@@ -85,8 +91,7 @@ function update_server
     cd $DIR$FOLDER &&
   CURRENT=$(git log -n 1 --pretty=format:"%H")
   LATEST=$(git log -n 1 origin/production --pretty=format:"%H")
-  if [ $CURRENT != $LATEST ]
-  then
+  if [ $CURRENT != $LATEST ]; then
     print_task "Pulling latest code" &&
       git pull origin $BRANCH &&
     print_task "Installing new dependencies" &&
@@ -129,19 +134,32 @@ function update_framework
 # Process input
 #
 case $1 in
+  "test")
+    install_app
+    ;;
   "install")
-    if [ $2 == "app" ]
-    then
+    if [[ $2 == "app" ]]; then
+      DIR=$PWD
+      GIT_CLONE="n"
+      USE_FOREVER="n"
+      AT_PORT="5000"
+      DB_NAME="adapt-tenant-prod"
+      TENANT_DISPLAY_NAME="Production"
+      TENANT_NAME="production"
       install_app
+    elif [[ $2 == "db" ]]; then
+      install_db
+    else
+      print_help
     fi
     ;;
   "update")
-    if [ $2 == "framework" ]
-    then
+    if [[ $2 == "framework" ]]; then
       update_framework
-    elif [ $2 == "server" ]
-    then
+    elif [[ $2 == "app" ]]; then
       update_server
+    else
+      print_help
     fi
     ;;
   "remove")
