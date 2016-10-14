@@ -58,13 +58,13 @@ function print_server_details
 function install_app
 {
   print_header "Installing latest ${REPO/https:\/\/github.com\//}/$BRANCH\n  in $DIR$FOLDER" &&
-#    clean_old_install
+    clean_old_install
     cd $DIR
-  if [[ $GIT_CLONE == "y" ]]; then
-    print_task "Cloning repo" &&
-      git clone --depth 1 $REPO -b $BRANCH $FOLDER &&
-      cd $FOLDER
-  fi
+    if [[ $GIT_CLONE == "y" ]]; then
+      print_task "Cloning repo" &&
+        git clone --depth 1 $REPO -b $BRANCH $FOLDER &&
+        cd $FOLDER
+    fi
   print_task "Installing dependencies" &&
     rm -rf "node_modules" &&
     npm install &&
