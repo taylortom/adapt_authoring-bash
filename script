@@ -6,6 +6,7 @@ FOLDER="AT_TEST"
 REPO="https://github.com/cgkineo/adapt_authoring.git"
 BRANCH="staging"
 GIT_CLONE="y"
+INSTALL_SERVER="y"
 USE_FOREVER="y"
 
 # Config items
@@ -44,6 +45,7 @@ function print_help
   echo "!! Unrecognised input"
   echo ""
   echo "Available tasks:"
+  echo "- test [clean]"
   echo "- install [app/db]"
   echo "- update [framework/server]"
   echo "- remove"
@@ -58,18 +60,27 @@ function print_server_details
 function install_app
 {
   print_header "Installing latest ${REPO/https:\/\/github.com\//}/$BRANCH\n  in $DIR$FOLDER" &&
-    clean_old_install
     cd $DIR
     if [[ $GIT_CLONE == "y" ]]; then
+      clean_old_install
       print_task "Cloning repo" &&
         git clone --depth 1 $REPO -b $BRANCH $FOLDER &&
         cd $FOLDER
+    else
+      cd $FOLDER
+      print_task "Pulling latest code from $REPO" &&
+        git fetch &&
+        git pull
     fi
   print_task "Installing dependencies" &&
-    rm -rf "node_modules" &&
-    npm install &&
-  print_task "Installing application" &&
-    node install --install Y --serverPort $AT_PORT --serverName $AT_SERVER --dbHost $DB_SERVER --dbName $DB_NAME --dbPort $DB_PORT --dataRoot $DATA_ROOT --sessionSecret $SESSION_SECRET --useffmpeg $USE_FFMPEG --smtpService $SMTP_SERVICE --smtpUsername $SMTP_USERNAME --smtpPassword $SMTP_PASS --fromAddress $SMTP_FROM --name $TENANT_NAME --displayName $TENANT_DISPLAY_NAME --email $ADMIN_EMAIL --password $ADMIN_PASS &&
+    npm install
+  if [[ $INSTALL_SERVER == "y" ]]; then
+    print_task "Installing application" &&
+      node install --install Y --serverPort $AT_PORT --serverName $AT_SERVER --dbHost $DB_SERVER --dbName $DB_NAME --dbPort $DB_PORT --dataRoot $DATA_ROOT --sessionSecret $SESSION_SECRET --useffmpeg $USE_FFMPEG --smtpService $SMTP_SERVICE --smtpUsername $SMTP_USERNAME --smtpPassword $SMTP_PASS --fromAddress $SMTP_FROM --name $TENANT_NAME --displayName $TENANT_DISPLAY_NAME --email $ADMIN_EMAIL --password $ADMIN_PASS
+  else
+    print_task "Building front-end" &&
+      grunt build:prod
+  fi
   if [[ $USE_FOREVER == "y" ]]; then
     print_task "Starting server" &&
       forever start --id $FOLDER server.js &&
@@ -135,6 +146,10 @@ function update_framework
 #
 case $1 in
   "test")
+    if [[ $2 != "clean" ]]; then
+      GIT_CLONE="n"
+      INSTALL_SERVER="n"
+    fi
     install_app
     ;;
   "install")
